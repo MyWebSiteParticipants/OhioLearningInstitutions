@@ -1,11 +1,27 @@
 interface HeaderProps {
-  onToggleMobileMenu: () => void;
+  onToggleMenu: () => void;
+  menuOpen: boolean;
 }
 
-export default function Header({ onToggleMobileMenu }: HeaderProps) {
+export default function Header({ onToggleMenu, menuOpen }: HeaderProps) {
+  // Format the injected build timestamp for display.
+  const buildDate = new Date(__BUILD_TIME__);
+  const lastUpdated = buildDate.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit',
+  });
+
   return (
     <div id="header">
-      <button className="hamburger" onClick={onToggleMobileMenu} aria-label="Menu">
+      <button
+        className="menu-button"
+        onClick={onToggleMenu}
+        aria-label="Menu"
+        aria-expanded={menuOpen}
+      >
         &#9776;
       </button>
       <svg className="header-seal" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
@@ -18,7 +34,10 @@ export default function Header({ onToggleMobileMenu }: HeaderProps) {
       <div id="header-center">
         <h1>Ohio Learning Institutions</h1>
         <div className="meta">
-          By Mike Costarella &nbsp;|&nbsp; Data: Fall 2024
+          By Mike Costarella &nbsp;|&nbsp; Data: Fall 2024 &nbsp;|&nbsp;
+          <span className="last-updated" title={buildDate.toISOString()}>
+            Last updated: {lastUpdated}
+          </span>
         </div>
       </div>
       <svg className="header-seal" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">

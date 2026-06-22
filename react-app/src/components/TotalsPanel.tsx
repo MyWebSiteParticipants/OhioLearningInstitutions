@@ -5,10 +5,10 @@ import type { Institution } from '../types';
 
 interface TotalsPanelProps {
   visible: Institution[];
-  mobileOpen?: boolean;
+  defaultCollapsed?: boolean;
 }
 
-export default function TotalsPanel({ visible, mobileOpen }: TotalsPanelProps) {
+export default function TotalsPanel({ visible, defaultCollapsed }: TotalsPanelProps) {
   const { byType, publicCount, privateCount, enrollment } = useMemo(() => {
     const byType: Record<string, number> = {};
     let publicCount = 0;
@@ -24,7 +24,7 @@ export default function TotalsPanel({ visible, mobileOpen }: TotalsPanelProps) {
   }, [visible]);
 
   return (
-    <Panel id="totals-panel" title="&#128202; TOTALS" mobileOpen={mobileOpen}>
+    <Panel id="totals-panel" title="&#128202; TOTALS" defaultCollapsed={defaultCollapsed}>
       {ALL_TYPES.filter((t) => byType[t]).map((t) => (
         <div className="total-item" key={t}>
           <span className="total-label">{t}</span>

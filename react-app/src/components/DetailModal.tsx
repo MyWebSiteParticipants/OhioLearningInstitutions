@@ -1,6 +1,9 @@
-import { useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import type { FeatureCollection } from 'geojson';
 import type { Institution } from '../types';
 import { TYPE_BADGE_COLOR, CONTROL_COLOR } from '../utils/icons';
+import { findJurisdiction } from '../utils/geo';
+import { loadBoundary } from '../data/boundaries';
 
 interface DetailModalProps {
   institution: Institution | null;
@@ -16,6 +19,46 @@ export default function DetailModal({ institution, onClose, onGoToMap }: DetailM
     document.addEventListener('keydown', onKey);
     return () => document.removeEventListener('keydown', onKey);
   }, [onClose]);
+
+  // Lazy-load the three jurisdiction layers once; resolve on demand.
+  const [layers, setLayers] = useState<{
+    counties: FeatureCollection;
+    municipalities: FeatureCollection;
+    townships: FeatureCollection;
+  } | null>(null);
+
+  useEffect(() => {
+    if (!institution || layers) return;
+    let alive = true;
+    Promise.all([
+      loadBoundary('counties'),
+      loadBoundary('municipalities'),
+      loadBoundary('townships'),
+    ])
+      .then(([c, m, t]) => {
+        if (alive) setLayers({ counties: c, municipalities: m, townships: t });
+      })
+      .catch(() => {
+        /* offline / fetch error — jurisdiction section just won't show */
+      });
+    return () => {
+      alive = false;
+    };
+  }, [institution, layers]);
+
+  const jurisdiction = useMemo(() => {
+    if (!institution || !layers) return null;
+    const { lat, lng } = institution;
+    const county = findJurisdiction(lat, lng, layers.counties);
+    const muni = findJurisdiction(lat, lng, layers.municipalities);
+    const twp = findJurisdiction(lat, lng, layers.townships);
+    return {
+      county: county?.name ?? null,
+      place: muni?.name ?? null,
+      placeType: muni?.type ?? null,
+      township: twp?.name ?? null,
+    };
+  }, [institution, layers]);
 
   if (!institution) return null;
   const inst = institution;
@@ -91,6 +134,30 @@ export default function DetailModal({ institution, onClose, onGoToMap }: DetailM
                 <div className="modal-field-label">Parent University</div>
                 <div className="modal-field-value">{inst.parentUniversity}</div>
               </div>
+            </div>
+          )}
+
+          {jurisdiction && (jurisdiction.county || jurisdiction.place || jurisdiction.township) && (
+            <div className="modal-row">
+              {jurisdiction.county && (
+                <div className="modal-field">
+                  <div className="modal-field-label">County</div>
+                  <div className="modal-field-value">{jurisdiction.county}</div>
+                </div>
+              )}
+              {jurisdiction.place ? (
+                <div className="modal-field">
+                  <div className="modal-field-label">
+                    {jurisdiction.placeType || 'Municipality'}
+                  </div>
+                  <div className="modal-field-value">{jurisdiction.place}</div>
+                </div>
+              ) : jurisdiction.township ? (
+                <div className="modal-field">
+                  <div className="modal-field-label">Township</div>
+                  <div className="modal-field-value">{jurisdiction.township}</div>
+                </div>
+              ) : null}
             </div>
           )}
 

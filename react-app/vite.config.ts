@@ -5,6 +5,10 @@ import { VitePWA } from 'vite-plugin-pwa';
 // GitHub Pages serves this project under /OhioLearningInstitutions/
 export default defineConfig({
   base: '/OhioLearningInstitutions/',
+  define: {
+    // Injected at build time; ISO string of when `vite build` ran.
+    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
+  },
   plugins: [
     react(),
     VitePWA({

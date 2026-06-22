@@ -25,10 +25,15 @@ website, and city government website.
 - List view with name/city search
 - Map / List toggle
 - Type and Control filters with live totals (counts + enrollment sum)
+- **Boundary overlays** — state, counties, municipalities, townships (toggleable)
+- **Offline point-in-polygon jurisdiction lookup** — detail dialog shows each
+  institution's county and city/village (or township)
+- **Geolocation ("Locate Me")** with `hasFlownToUser` guard and out-of-area
+  fly-to-bounds fallback
 - Detail modal: website, Google Maps directions, city website, **Go To on Map**
 - Pulsing amber highlight ring on the selected institution
 - CSV export (UTF-8 BOM) of the currently filtered set
-- Mobile-responsive with hamburger-accessible panels
+- Mobile-responsive with a menu strip reaching all panels
 
 ## Repository Layout
 

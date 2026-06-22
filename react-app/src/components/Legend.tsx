@@ -3,12 +3,12 @@ import { ALL_TYPES } from '../types';
 import { makeIconSVG, CONTROL_COLOR } from '../utils/icons';
 
 interface LegendProps {
-  mobileOpen?: boolean;
+  defaultCollapsed?: boolean;
 }
 
-export default function Legend({ mobileOpen }: LegendProps) {
+export default function Legend({ defaultCollapsed }: LegendProps) {
   return (
-    <Panel id="legend" title="&#128506; LEGEND" mobileOpen={mobileOpen}>
+    <Panel id="legend" title="&#128506; LEGEND" defaultCollapsed={defaultCollapsed}>
       <div className="legend-section">
         <div className="legend-section-title">Institution Type</div>
         {ALL_TYPES.map((t) => (

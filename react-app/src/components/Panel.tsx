@@ -3,15 +3,14 @@ import { useState, type ReactNode } from 'react';
 interface PanelProps {
   id: string;
   title: string;
-  mobileOpen?: boolean;
+  defaultCollapsed?: boolean;
   children: ReactNode;
 }
 
-export default function Panel({ id, title, mobileOpen, children }: PanelProps) {
-  const [collapsed, setCollapsed] = useState(false);
+export default function Panel({ id, title, defaultCollapsed = false, children }: PanelProps) {
+  const [collapsed, setCollapsed] = useState(defaultCollapsed);
   const classes = ['panel'];
   if (collapsed) classes.push('collapsed');
-  if (mobileOpen) classes.push('mobile-open');
 
   return (
     <div className={classes.join(' ')} id={id}>
