@@ -1,0 +1,647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ohio Learning Institutions</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Segoe UI', Arial, sans-serif; background: #f0f4f8; overflow: hidden; }
+
+  #map { position: absolute; top: 0; left: 0; width: 100%; height: 100vh; z-index: 1; }
+
+  /* ─── HEADER BANNER ─── */
+  #header {
+    position: absolute; top: 0; left: 0; right: 0; z-index: 1000;
+    background: linear-gradient(135deg, #002868 0%, #003a8a 50%, #BF0A30 100%);
+    color: white; text-align: center; padding: 10px 16px 8px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.4);
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 10px;
+  }
+  #header-center { flex: 1; }
+  #header h1 { font-size: clamp(14px, 3vw, 24px); font-weight: 800; letter-spacing: 1px; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+  #header .meta { font-size: clamp(9px, 1.5vw, 12px); opacity: 0.85; margin-top: 2px; }
+  #header-seal {
+    width: clamp(38px, 6vw, 56px); height: clamp(38px, 6vw, 56px);
+    opacity: 0.95; flex-shrink: 0;
+  }
+
+  /* ─── PANEL BASE ─── */
+  .panel {
+    position: absolute; z-index: 900;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 4px 18px rgba(0,0,0,0.18);
+    overflow: hidden;
+    transition: all 0.3s ease;
+  }
+  .panel-header {
+    background: linear-gradient(135deg, #002868, #003a8a);
+    color: white; padding: 8px 12px;
+    display: flex; align-items: center; justify-content: space-between;
+    cursor: pointer; user-select: none; font-weight: 700; font-size: 12px;
+    letter-spacing: 0.5px;
+  }
+  .panel-toggle { font-size: 14px; transition: transform 0.3s; }
+  .panel.collapsed .panel-toggle { transform: rotate(-90deg); }
+  .panel-body { padding: 10px 12px; transition: all 0.3s; }
+  .panel.collapsed .panel-body { display: none; }
+
+  /* ─── LEGEND ─── */
+  #legend { top: 75px; right: 12px; width: 210px; }
+  .legend-section { margin-bottom: 10px; }
+  .legend-section-title { font-size: 10px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 5px; border-bottom: 1px solid #eee; padding-bottom: 3px; }
+  .legend-item { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; font-size: 11px; color: #333; }
+  .legend-icon { width: 24px; height: 24px; flex-shrink: 0; display: flex; align-items: center; justify-content: center; }
+  .color-swatch { width: 14px; height: 14px; border-radius: 50%; border: 2px solid rgba(0,0,0,0.2); flex-shrink: 0; }
+
+  /* ─── FILTER ─── */
+  #filter-panel { top: 75px; left: 12px; width: 210px; }
+  .filter-group { margin-bottom: 10px; }
+  .filter-group-title { font-size: 10px; font-weight: 700; color: #555; text-transform: uppercase; letter-spacing: 0.6px; margin-bottom: 5px; }
+  .filter-item { display: flex; align-items: center; gap: 7px; margin-bottom: 4px; font-size: 11px; color: #333; cursor: pointer; }
+  .filter-item input[type=checkbox] { width: 14px; height: 14px; cursor: pointer; accent-color: #002868; }
+  .filter-btn {
+    width: 100%; padding: 5px; margin-top: 4px;
+    background: #002868; color: white; border: none; border-radius: 5px;
+    font-size: 11px; font-weight: 600; cursor: pointer;
+  }
+  .filter-btn:hover { background: #003a8a; }
+
+  /* ─── TOTALS ─── */
+  #totals-panel { top: 75px; left: 234px; width: 200px; }
+  .total-item { display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid #f0f0f0; font-size: 11px; }
+  .total-item:last-child { border-bottom: none; font-weight: 700; background: #f8f9fa; margin: 0 -12px -10px; padding: 6px 12px; }
+  .total-label { color: #555; }
+  .total-val { font-weight: 700; color: #002868; }
+
+  /* ─── MODAL ─── */
+  #modal-overlay {
+    display: none; position: fixed; inset: 0; z-index: 2000;
+    background: rgba(0,0,0,0.55); backdrop-filter: blur(2px);
+    align-items: center; justify-content: center;
+  }
+  #modal-overlay.active { display: flex; }
+  #modal {
+    background: white; border-radius: 14px; width: 90%; max-width: 520px;
+    max-height: 90vh; overflow-y: auto;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    animation: modalIn 0.25s ease;
+  }
+  @keyframes modalIn { from { transform: scale(0.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  #modal-header {
+    padding: 18px 20px 14px;
+    border-bottom: 2px solid #eee;
+    display: flex; justify-content: space-between; align-items: flex-start;
+  }
+  #modal-title { font-size: 18px; font-weight: 800; color: #002868; line-height: 1.3; flex: 1; }
+  #modal-type-badge {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    padding: 3px 8px; border-radius: 20px; letter-spacing: 0.6px;
+    margin-left: 10px; white-space: nowrap; align-self: flex-start; margin-top: 3px;
+  }
+  #modal-close {
+    background: none; border: none; font-size: 22px; cursor: pointer;
+    color: #999; margin-left: 10px; line-height: 1;
+  }
+  #modal-close:hover { color: #333; }
+  #modal-body { padding: 16px 20px 20px; }
+  .modal-row { display: flex; gap: 10px; margin-bottom: 10px; }
+  .modal-field { flex: 1; }
+  .modal-field-label { font-size: 10px; font-weight: 700; color: #888; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 2px; }
+  .modal-field-value { font-size: 13px; color: #222; font-weight: 500; }
+  .modal-divider { border: none; border-top: 1px solid #eee; margin: 12px 0; }
+  .modal-link-btn {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 8px 14px; border-radius: 7px; font-size: 12px; font-weight: 600;
+    text-decoration: none; cursor: pointer; border: none; margin: 4px 4px 4px 0;
+  }
+  .btn-primary { background: #002868; color: white; }
+  .btn-primary:hover { background: #003a8a; }
+  .btn-gmaps { background: #34A853; color: white; }
+  .btn-gmaps:hover { background: #2d9246; }
+  .btn-city { background: #6c757d; color: white; }
+  .btn-city:hover { background: #545b62; }
+
+  /* ─── MOBILE CONTROLS ─── */
+  .mobile-ctrl-btn {
+    display: none;
+    position: absolute; z-index: 910; width: 38px; height: 38px;
+    background: white; border: 2px solid rgba(0,0,0,0.2);
+    border-radius: 6px; align-items: center; justify-content: center;
+    cursor: pointer; font-size: 16px; box-shadow: 0 2px 6px rgba(0,0,0,0.15);
+    left: 10px;
+  }
+  #btn-filter-mob { top: 120px; }
+  #btn-legend-mob { top: 165px; }
+  #btn-totals-mob { top: 210px; }
+
+  /* ─── TOOLTIP ─── */
+  .leaflet-tooltip.inst-tip {
+    background: rgba(0,20,80,0.92); color: white; border: none;
+    border-radius: 6px; font-size: 11px; padding: 6px 12px;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.3); pointer-events: none;
+    font-weight: 600; min-width: 220px; max-width: 300px; white-space: normal; line-height: 1.5;
+  }
+  .leaflet-tooltip.inst-tip::before { border-top-color: rgba(0,20,80,0.92); }
+
+  /* ─── RESPONSIVE ─── */
+  @media (max-width: 700px) {
+    #totals-panel, #filter-panel, #legend { display: none; }
+    .mobile-ctrl-btn { display: flex; }
+    .panel.mobile-open { display: block !important; left: 55px; top: auto; right: 10px; width: auto; max-width: 260px; }
+    #legend.mobile-open { top: 120px; }
+    #filter-panel.mobile-open { top: 120px; }
+    #totals-panel.mobile-open { top: 120px; left: 55px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- MAP -->
+<div id="map"></div>
+
+<!-- HEADER -->
+<div id="header">
+  <!-- Ohio Flag SVG seal (simplified) -->
+  <svg id="header-seal" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="50" cy="50" r="48" fill="#002868" stroke="#BF0A30" stroke-width="3"/>
+    <circle cx="50" cy="50" r="36" fill="#ffffff" opacity="0.12"/>
+    <text x="50" y="46" text-anchor="middle" font-size="28" fill="white" font-weight="900">OH</text>
+    <text x="50" y="64" text-anchor="middle" font-size="10" fill="#f0c040" font-weight="700" letter-spacing="1">OHIO</text>
+    <text x="50" y="76" text-anchor="middle" font-size="7.5" fill="white" font-weight="500">Est. 1803</text>
+  </svg>
+  <div id="header-center">
+    <h1>Ohio Learning Institutions</h1>
+    <div class="meta">Created: April 12, 2026 &nbsp;|&nbsp; By Mike Costarella &nbsp;|&nbsp; Data: Fall 2024</div>
+  </div>
+  <svg id="header-seal" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="50" cy="50" r="48" fill="#BF0A30" stroke="#002868" stroke-width="3"/>
+    <text x="50" y="42" text-anchor="middle" font-size="11" fill="white" font-weight="700">OHIO</text>
+    <text x="50" y="56" text-anchor="middle" font-size="10" fill="#f0c040" font-weight="700">LEARNING</text>
+    <text x="50" y="70" text-anchor="middle" font-size="9" fill="white" font-weight="500">INSTITUTIONS</text>
+  </svg>
+</div>
+
+<!-- MOBILE TOGGLE BUTTONS -->
+<button class="mobile-ctrl-btn" id="btn-filter-mob" title="Filters" onclick="toggleMobilePanel('filter-panel')">⚙️</button>
+<button class="mobile-ctrl-btn" id="btn-legend-mob" title="Legend" onclick="toggleMobilePanel('legend')">🗺</button>
+<button class="mobile-ctrl-btn" id="btn-totals-mob" title="Totals" onclick="toggleMobilePanel('totals-panel')">📊</button>
+
+<!-- FILTER PANEL -->
+<div class="panel" id="filter-panel">
+  <div class="panel-header" onclick="togglePanel('filter-panel')">
+    <span>⚙ FILTERS</span><span class="panel-toggle">▼</span>
+  </div>
+  <div class="panel-body">
+    <div class="filter-group">
+      <div class="filter-group-title">Institution Type</div>
+      <label class="filter-item"><input type="checkbox" checked data-filter="type" value="University"> University</label>
+      <label class="filter-item"><input type="checkbox" checked data-filter="type" value="University Branch"> University Branch</label>
+      <label class="filter-item"><input type="checkbox" checked data-filter="type" value="College"> College</label>
+      <label class="filter-item"><input type="checkbox" checked data-filter="type" value="Community College"> Community College</label>
+    </div>
+    <div class="filter-group">
+      <div class="filter-group-title">Control</div>
+      <label class="filter-item"><input type="checkbox" checked data-filter="control" value="Public"> Public</label>
+      <label class="filter-item"><input type="checkbox" checked data-filter="control" value="Private"> Private</label>
+    </div>
+    <button class="filter-btn" onclick="resetFilters()">Reset All</button>
+  </div>
+</div>
+
+<!-- TOTALS PANEL -->
+<div class="panel" id="totals-panel">
+  <div class="panel-header" onclick="togglePanel('totals-panel')">
+    <span>📊 TOTALS</span><span class="panel-toggle">▼</span>
+  </div>
+  <div class="panel-body" id="totals-body">
+    <!-- filled by JS -->
+  </div>
+</div>
+
+<!-- LEGEND -->
+<div class="panel" id="legend">
+  <div class="panel-header" onclick="togglePanel('legend')">
+    <span>🗺 LEGEND</span><span class="panel-toggle">▼</span>
+  </div>
+  <div class="panel-body">
+    <div class="legend-section">
+      <div class="legend-section-title">Institution Type</div>
+      <div class="legend-item">
+        <div class="legend-icon">${svgIcon('University','#888')}</div>
+        <span>University</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-icon">${svgIcon('University Branch','#888')}</div>
+        <span>University Branch</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-icon">${svgIcon('College','#888')}</div>
+        <span>College</span>
+      </div>
+      <div class="legend-item">
+        <div class="legend-icon">${svgIcon('Community College','#888')}</div>
+        <span>Community College</span>
+      </div>
+    </div>
+    <div class="legend-section">
+      <div class="legend-section-title">Control</div>
+      <div class="legend-item">
+        <div class="color-swatch" style="background:#1a56c4"></div>
+        <span>Public</span>
+      </div>
+      <div class="legend-item">
+        <div class="color-swatch" style="background:#c0392b"></div>
+        <span>Private</span>
+      </div>
+    </div>
+    <div class="legend-section" style="margin-bottom:0">
+      <div class="legend-section-title">Click any marker for details</div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL -->
+<div id="modal-overlay" onclick="closeModal(event)">
+  <div id="modal">
+    <div id="modal-header">
+      <div id="modal-title"></div>
+      <span id="modal-type-badge"></span>
+      <button id="modal-close" onclick="closeModal()">&times;</button>
+    </div>
+    <div id="modal-body"></div>
+  </div>
+</div>
+
+<script>
+// ─── DATA ───────────────────────────────────────────────────────────────────
+const INSTITUTIONS = [{"name":"Air Force Institute of Technology","address":"2950 Hobson Way","city":"Wright-Patterson AFB","state":"OH","zip":"45433","type":"University","control":"Public","sector":"4-Year","enrollment":1070,"enrYear":2024,"website":"https://www.afit.edu","cityWebsite":"https://www.wpafb.af.mil","tab":"main"},{"name":"Allegheny Wesleyan College","address":"2161 Woodsdale Rd","city":"Salem","state":"OH","zip":"44460","type":"College","control":"Private","sector":"4-Year","enrollment":60,"enrYear":2024,"website":"https://www.awc.edu","cityWebsite":"https://www.cityofsalemohio.org","tab":"main"},{"name":"American Institute of Alternative Medicine","address":"6685 Doubletree Ave","city":"Columbus","state":"OH","zip":"43229","type":"College","control":"Private","sector":"4-Year","enrollment":251,"enrYear":2024,"website":"https://www.aiam.edu","cityWebsite":"https://www.columbus.gov","tab":"main"},{"name":"Antioch College","address":"1 Morgan Pl","city":"Yellow Springs","state":"OH","zip":"45387","type":"College","control":"Private","sector":"4-Year","enrollment":121,"enrYear":2024,"website":"https://www.antiochcollege.edu","cityWebsite":"https://www.yellowspringsohio.org","tab":"main"},{"name":"Antioch University","address":"900 Dayton St","city":"Yellow Springs","state":"OH","zip":"45387","type":"University","control":"Private","sector":"4-Year","enrollment":486,"enrYear":2024,"website":"https://www.antioch.edu","cityWebsite":"https://www.yellowspringsohio.org","tab":"main"},{"name":"Art Academy of Cincinnati","address":"1212 Jackson St","city":"Cincinnati","state":"OH","zip":"45202","type":"College","control":"Private","sector":"4-Year","enrollment":213,"enrYear":2024,"website":"https://www.artacademy.edu","cityWebsite":"https://www.cincinnati-oh.gov","tab":"main"},{"name":"Ashland University","address":"401 College Ave","city":"Ashland","state":"OH","zip":"44805","type":"University","control":"Private","sector":"4-Year","enrollment":4106,"enrYear":2024,"website":"https://www.ashland.edu","cityWebsite":"https://www.ashland.oh.us","tab":"main"},{"name":"Athenaeum of Ohio","address":"6616 Beechmont Ave","city":"Cincinnati","state":"OH","zip":"45230","type":"College","control":"Private","sector":"4-Year","enrollment":156,"enrYear":2024,"website":"https://www.athenaeum.edu","cityWebsite":"https://www.cincinnati-oh.gov","tab":"main"},{"name":"Aultman College of Nursing and Health Sciences","address":"2600 6th St SW","city":"Canton","state":"OH","zip":"44710","type":"College","control":"Private","sector":"4-Year","enrollment":286,"enrYear":2024,"website":"https://www.aultmancollege.edu","cityWebsite":"https://www.cantonohio.gov","tab":"main"},{"name":"Baldwin Wallace University","address":"275 Eastland Rd","city":"Berea","state":"OH","zip":"44017","type":"University","control":"Private","sector":"4-Year","enrollment":3305,"enrYear":2024,"website":"https://www.bw.edu","cityWebsite":"https://www.cityofberea.org","tab":"main"},{"name":"Belmont College","address":"68094 Hammond Rd","city":"St. Clairsville","state":"OH","zip":"43950","type":"College","control":"Public","sector":"2-Year","enrollment":2020,"enrYear":2024,"website":"https://www.belmontcollege.edu","cityWebsite":"https://www.stclairsvilleohio.gov","tab":"main"},{"name":"Bluffton University","address":"1 University Dr","city":"Bluffton","state":"OH","zip":"45817","type":"University","control":"Private","sector":"4-Year","enrollment":646,"enrYear":2024,"website":"https://www.bluffton.edu","cityWebsite":"https://www.blufftonohio.org","tab":"main"},{"name":"Bowling Green State University","address":"1851 N Research Dr","city":"Bowling Green","state":"OH","zip":"43403","type":"University","control":"Public","sector":"4-Year","enrollment":17594,"enrYear":2024,"website":"https://www.bgsu.edu","cityWebsite":"https://www.bgohio.org","tab":"main"},{"name":"Bowling Green State University - Firelands","address":"One University Dr","city":"Huron","state":"OH","zip":"44839","type":"University Branch","control":"Public","sector":"2-Year","enrollment":2097,"enrYear":2024,"website":"https://www.bgsu.edu/firelands","cityWebsite":"https://www.cityofhuron.org","tab":"main"},{"name":"Capital University","address":"1 College and Main","city":"Bexley","state":"OH","zip":"43209","type":"University","control":"Private","sector":"4-Year","enrollment":2263,"enrYear":2024,"website":"https://www.capital.edu","cityWebsite":"https://www.bexley.org","tab":"main"},{"name":"Case Western Reserve University","address":"10900 Euclid Ave","city":"Cleveland","state":"OH","zip":"44106","type":"University","control":"Private","sector":"4-Year","enrollment":12475,"enrYear":2024,"website":"https://www.case.edu","cityWebsite":"https://www.clevelandohio.gov","tab":"main"},{"name":"Cedarville University","address":"251 N Main St","city":"Cedarville","state":"OH","zip":"45314","type":"University","control":"Private","sector":"4-Year","enrollment":6318,"enrYear":2024,"website":"https://www.cedarville.edu","cityWebsite":"https://www.cedarville.gov","tab":"main"},{"name":"Central Ohio Technical College","address":"1179 University Dr","city":"Newark","state":"OH","zip":"43055","type":"College","control":"Public","sector":"2-Year","enrollment":3182,"enrYear":2024,"website":"https://www.cotc.edu","cityWebsite":"https://www.newarkohio.net","tab":"main"},{"name":"Central State University","address":"1400 Brush Row Rd","city":"Wilberforce","state":"OH","zip":"45384","type":"University","control":"Public","sector":"4-Year","enrollment":2708,"enrYear":2024,"website":"https://www.centralstate.edu","cityWebsite":"https://www.xenia.oh.us","tab":"main"},{"name":"Cincinnati State Technical and Community College","address":"3520 Central Pkwy","city":"Cincinnati","state":"OH","zip":"45223","type":"Community College","control":"Public","sector":"2-Year","enrollment":9683,"enrYear":2024,"website":"https://www.cincinnatistate.edu","cityWebsite":"https://www.cincinnati-oh.gov","tab":"main"},{"name":"Clark State College","address":"570 E Leffel Ln","city":"Springfield","state":"OH","zip":"45505","type":"College","control":"Public","sector":"2-Year","enrollment":5077,"enrYear":2024,"website":"https://www.clarkstate.edu","cityWebsite":"https://www.springfieldohio.gov","tab":"main"},{"name":"Cleveland Institute of Art","address":"11610 Euclid Ave","city":"Cleveland","state":"OH","zip":"44106","type":"College","control":"Private","sector":"4-Year","enrollment":545,"enrYear":2024,"website":"https://www.cia.edu","cityWebsite":"https://www.clevelandohio.gov","tab":"main"},{"name":"Cleveland Institute of Music","address":"11021 East Blvd","city":"Cleveland","state":"OH","zip":"44106","type":"College","control":"Private","sector":"4-Year","enrollment":293,"enrYear":2024,"website":"https://www.cim.edu","cityWebsite":"https://www.clevelandohio.gov","tab":"main"},{"name":"Cleveland State University","address":"2121 Euclid Ave","city":"Cleveland","state":"OH","zip":"44115","type":"University","control":"Public","sector":"4-Year","enrollment":14074,"enrYear":2024,"website":"https://www.csuohio.edu","cityWebsite":"https://www.clevelandohio.gov","tab":"main"},{"name":"Columbus College of Art and Design","address":"60 Cleveland Ave","city":"Columbus","state":"OH","zip":"43215","type":"College","control":"Private","sector":"4-Year","enrollment":916,"enrYear":2024,"website":"https://www.ccad.edu","cityWebsite":"https://www.columbus.gov","tab":"main"},{"name":"Columbus State Community College","address":"550 E Spring St","city":"Columbus","state":"OH","zip":"43215","type":"Community College","control":"Public","sector":"2-Year","enrollment":28081,"enrYear":2024,"website":"https://www.cscc.edu","cityWebsite":"https://www.columbus.gov","tab":"main"},{"name":"Cuyahoga Community College","address":"700 Carnegie Ave","city":"Cleveland","state":"OH","zip":"44115","type":"Community College","control":"Public","sector":"2-Year","enrollment":17840,"enrYear":2024,"website":"https://www.tri-c.edu","cityWebsite":"https://www.clevelandohio.gov","tab":"main"},{"name":"Defiance College","address":"701 N Clinton St","city":"Defiance","state":"OH","zip":"43512","type":"College","control":"Private","sector":"4-Year","enrollment":568,"enrYear":2024,"website":"https://www.defiance.edu","cityWebsite":"https://www.cityofdefiance.com","tab":"main"},{"name":"Denison University","address":"100 W College St","city":"Granville","state":"OH","zip":"43023","type":"University","control":"Private","sector":"4-Year","enrollment":2394,"enrYear":2024,"website":"https://www.denison.edu","cityWebsite":"https://www.granville.oh.us","tab":"main"},{"name":"Edison State Community College","address":"1973 Edison Dr","city":"Piqua","state":"OH","zip":"45356","type":"Community College","control":"Public","sector":"2-Year","enrollment":4624,"enrYear":2024,"website":"https://www.edisonohio.edu","cityWebsite":"https://www.piquaoh.org","tab":"main"},{"name":"Franciscan University of Steubenville","address":"1235 University Blvd","city":"Steubenville","state":"OH","zip":"43952","type":"University","control":"Private","sector":"4-Year","enrollment":3976,"enrYear":2024,"website":"https://www.franciscan.edu","cityWebsite":"https://www.cityofsteubenville.us","tab":"main"},{"name":"Franklin University","address":"201 S Grant Ave","city":"Columbus","state":"OH","zip":"43215","type":"University","control":"Private","sector":"4-Year","enrollment":9457,"enrYear":2024,"website":"https://www.franklin.edu","cityWebsite":"https://www.columbus.gov","tab":"main"},{"name":"Heidelberg University","address":"310 E Market St","city":"Tiffin","state":"OH","zip":"44883","type":"University","control":"Private","sector":"4-Year","enrollment":1091,"enrYear":2024,"website":"https://www.heidelberg.edu","cityWebsite":"https://www.tiffinohio.gov","tab":"main"},{"name":"Hiram College","address":"11694 Hayden St","city":"Hiram","state":"OH","zip":"44234","type":"College","control":"Private","sector":"4-Year","enrollment":1061,"enrYear":2024,"website":"https://www.hiram.edu","cityWebsite":"https://www.hiramohio.org","tab":"main"},{"name":"Hocking College","address":"3301 Hocking Pkwy","city":"Nelsonville","state":"OH","zip":"45764","type":"College","control":"Public","sector":"2-Year","enrollment":1486,"enrYear":2024,"website":"https://www.hocking.edu","cityWebsite":"https://www.nelsonvilleohio.net","tab":"main"},{"name":"Hondros College of Nursing","address":"4140 Executive Pkwy","city":"Westerville","state":"OH","zip":"43081","type":"College","control":"Private","sector":"2-Year","enrollment":3857,"enrYear":2024,"website":"https://www.hondros.edu","cityWebsite":"https://www.westerville.org","tab":"main"},{"name":"James A. Rhodes State College","address":"4240 Campus Dr","city":"Lima","state":"OH","zip":"45804","type":"College","control":"Public","sector":"2-Year","enrollment":4124,"enrYear":2024,"website":"https://www.rhodesstate.edu","cityWebsite":"https://www.cityhall.lima.oh.us","tab":"main"},{"name":"John Carroll University","address":"1 John Carroll Blvd","city":"University Heights","state":"OH","zip":"44118","type":"University","control":"Private","sector":"4-Year","enrollment":2864,"enrYear":2024,"website":"https://www.jcu.edu","cityWebsite":"https://www.universityheights.com","tab":"main"},{"name":"Kent State University","address":"1025 Risman Dr","city":"Kent","state":"OH","zip":"44242","type":"University","control":"Public","sector":"4-Year","enrollment":40962,"enrYear":2024,"website":"https://www.kent.edu","cityWebsite":"https://www.kentohio.org","tab":"main"},{"name":"Kenyon College","address":"103 College-Park St","city":"Gambier","state":"OH","zip":"43022","type":"College","control":"Private","sector":"4-Year","enrollment":2249,"enrYear":2024,"website":"https://www.kenyon.edu","cityWebsite":"https://www.gambierohio.org","tab":"main"},{"name":"Kettering College","address":"3737 Southern Blvd","city":"Kettering","state":"OH","zip":"45429","type":"College","control":"Private","sector":"4-Year","enrollment":757,"enrYear":2024,"website":"https://www.kc.edu","cityWebsite":"https://www.ketteringoh.org","tab":"main"},{"name":"Lake Erie College","address":"391 W Washington St","city":"Painesville","state":"OH","zip":"44077","type":"College","control":"Private","sector":"4-Year","enrollment":1108,"enrYear":2024,"website":"https://www.lec.edu","cityWebsite":"https://www.painesville.com","tab":"main"},{"name":"Lakeland Community College","address":"7700 Clocktower Dr","city":"Kirtland","state":"OH","zip":"44094","type":"Community College","control":"Public","sector":"2-Year","enrollment":4358,"enrYear":2024,"website":"https://www.lakelandcc.edu","cityWebsite":"https://www.kirtlandohio.com","tab":"main"},{"name":"Lorain County Community College","address":"1005 N Abbe Rd","city":"Elyria","state":"OH","zip":"44035","type":"Community College","control":"Public","sector":"2-Year","enrollment":9350,"enrYear":2024,"website":"https://www.lorainccc.edu","cityWebsite":"https://www.cityofelyria.org","tab":"main"},{"name":"Lourdes University","address":"6832 Convent Blvd","city":"Sylvania","state":"OH","zip":"43560","type":"University","control":"Private","sector":"4-Year","enrollment":964,"enrYear":2024,"website":"https://www.lourdes.edu","cityWebsite":"https://www.sylvaniaohio.net","tab":"main"},{"name":"Malone University","address":"2600 Cleveland Ave NW","city":"Canton","state":"OH","zip":"44709","type":"University","control":"Private","sector":"4-Year","enrollment":1256,"enrYear":2024,"website":"https://www.malone.edu","cityWebsite":"https://www.cantonohio.gov","tab":"main"},{"name":"Marietta College","address":"215 Fifth St","city":"Marietta","state":"OH","zip":"45750","type":"College","control":"Private","sector":"4-Year","enrollment":1109,"enrYear":2024,"website":"https://www.marietta.edu","cityWebsite":"https://www.mariettaoh.net","tab":"main"},{"name":"Marion Technical College","address":"1467 Mt. Vernon Ave","city":"Marion","state":"OH","zip":"43302","type":"College","control":"Public","sector":"2-Year","enrollment":3346,"enrYear":2024,"website":"https://www.mtc.edu","cityWebsite":"https://www.marionohio.us","tab":"main"},{"name":"Mercy College of Ohio","address":"2221 Madison Ave","city":"Toledo","state":"OH","zip":"43604","type":"College","control":"Private","sector":"4-Year","enrollment":1096,"enrYear":2024,"website":"https://www.mercycollege.edu","cityWebsite":"https://www.toledo.oh.gov","tab":"main"},{"name":"Miami University","address":"501 E High St","city":"Oxford","state":"OH","zip":"45056","type":"University","control":"Public","sector":"4-Year","enrollment":22508,"enrYear":2024,"website":"https://www.miamioh.edu","cityWebsite":"https://www.oxford.oh.us","tab":"main"},{"name":"Mount Carmel College of Nursing","address":"127 S Davis Ave","city":"Columbus","state":"OH","zip":"43222","type":"College","control":"Private","sector":"4-Year","enrollment":670,"enrYear":2024,"website":"https://www.mccn.edu","cityWebsite":"https://www.columbus.gov","tab":"main"},{"name":"Mount St. Joseph University","address":"5701 Delhi Rd","city":"Cincinnati","state":"OH","zip":"45233","type":"University","control":"Private","sector":"4-Year","enrollment":2265,"enrYear":2024,"website":"https://www.msj.edu","cityWebsite":"https://www.cincinnati-oh.gov","tab":"main"},{"name":"Mount Vernon Nazarene University","address":"800 Martinsburg Rd","city":"Mount Vernon","state":"OH","zip":"43050","type":"University","control":"Private","sector":"4-Year","enrollment":1671,"enrYear":2024,"website":"https://www.mvnu.edu","cityWebsite":"https://www.mountvernonohio.org","tab":"main"},{"name":"Muskingum University","address":"163 Stormont St","city":"New Concord","state":"OH","zip":"43762","type":"University","control":"Private","sector":"4-Year","enrollment":1751,"enrYear":2024,"website":"https://www.muskingum.edu","cityWebsite":"https://www.newconcordohio.org","tab":"main"},{"name":"North Central State College","address":"2441 Kenwood Circle","city":"Mansfield","state":"OH","zip":"44906","type":"College","control":"Public","sector":"2-Year","enrollment":2553,"enrYear":2024,"website":"https://www.ncstatecollege.edu","cityWebsite":"https://www.ci.mansfield.oh.us","tab":"main"},{"name":"Northeast Ohio Medical University","address":"4209 State Route 44","city":"Rootstown","state":"OH","zip":"44272","type":"University","control":"Public","sector":"4-Year","enrollment":1029,"enrYear":2024,"website":"https://www.neomed.edu","cityWebsite":"https://www.rootstowntwp.com","tab":"main"},{"name":"Northwest State Community College","address":"22600 State Route 34","city":"Archbold","state":"OH","zip":"43502","type":"Community College","control":"Public","sector":"2-Year","enrollment":4082,"enrYear":2024,"website":"https://www.northweststate.edu","cityWebsite":"https://www.archboldohio.gov","tab":"main"},{"name":"Oberlin College","address":"70 N Professor St","city":"Oberlin","state":"OH","zip":"44074","type":"College","control":"Private","sector":"4-Year","enrollment":2909,"enrYear":2024,"website":"https://www.oberlin.edu","cityWebsite":"https://www.cityofoberlinhio.com","tab":"main"},{"name":"Ohio Christian University","address":"1476 Lancaster Pike","city":"Circleville","state":"OH","zip":"43113","type":"University","control":"Private","sector":"4-Year","enrollment":1431,"enrYear":2024,"website":"https://www.ohiochristian.edu","cityWebsite":"https://www.circlevilleohio.gov","tab":"main"},{"name":"Ohio Dominican University","address":"1216 Sunbury Rd","city":"Columbus","state":"OH","zip":"43219","type":"University","control":"Private","sector":"4-Year","enrollment":1209,"enrYear":2024,"website":"https://www.ohiodominican.edu","cityWebsite":"https://www.columbus.gov","tab":"main"},{"name":"Ohio Northern University","address":"525 S Main St","city":"Ada","state":"OH","zip":"45810","type":"University","control":"Private","sector":"4-Year","enrollment":3140,"enrYear":2024,"website":"https://www.onu.edu","cityWebsite":"https://www.adaoh.org","tab":"main"},{"name":"Ohio State University","address":"281 W Lane Ave","city":"Columbus","state":"OH","zip":"43210","type":"University","control":"Public","sector":"4-Year","enrollment":66408,"enrYear":2024,"website":"https://www.osu.edu","cityWebsite":"https://www.columbus.gov","tab":"main"},{"name":"Ohio Technical College","address":"1374 E 51st St","city":"Cleveland","state":"OH","zip":"44103","type":"College","control":"Private","sector":"2-Year","enrollment":683,"enrYear":2024,"website":"https://www.ohiotechnical.edu","cityWebsite":"https://www.clevelandohio.gov","tab":"main"},{"name":"Ohio University","address":"1 Ohio University","city":"Athens","state":"OH","zip":"45701","type":"University","control":"Public","sector":"4-Year","enrollment":35580,"enrYear":2024,"website":"https://www.ohio.edu","cityWebsite":"https://www.ci.athens.oh.us","tab":"main"},{"name":"Ohio Wesleyan University","address":"61 S Sandusky St","city":"Delaware","state":"OH","zip":"43015","type":"University","control":"Private","sector":"4-Year","enrollment":1525,"enrYear":2024,"website":"https://www.owu.edu","cityWebsite":"https://www.delawareohio.net","tab":"main"},{"name":"Otterbein University","address":"1 S Grove St","city":"Westerville","state":"OH","zip":"43081","type":"University","control":"Private","sector":"4-Year","enrollment":2332,"enrYear":2024,"website":"https://www.otterbein.edu","cityWebsite":"https://www.westerville.org","tab":"main"},{"name":"Owens Community College","address":"30335 Oregon Rd","city":"Perrysburg","state":"OH","zip":"43551","type":"Community College","control":"Public","sector":"2-Year","enrollment":7854,"enrYear":2024,"website":"https://www.owens.edu","cityWebsite":"https://www.ci.perrysburg.oh.us","tab":"main"},{"name":"Pontifical College Josephinum","address":"7625 N High St","city":"Columbus","state":"OH","zip":"43235","type":"College","control":"Private","sector":"4-Year","enrollment":88,"enrYear":2024,"website":"https://www.pcj.edu","cityWebsite":"https://www.columbus.gov","tab":"main"},{"name":"Shawnee State University","address":"940 2nd St","city":"Portsmouth","state":"OH","zip":"45662","type":"University","control":"Public","sector":"4-Year","enrollment":3231,"enrYear":2024,"website":"https://www.shawnee.edu","cityWebsite":"https://www.portsmouthoh.org","tab":"main"},{"name":"Sinclair Community College","address":"444 W 3rd St","city":"Dayton","state":"OH","zip":"45402","type":"Community College","control":"Public","sector":"2-Year","enrollment":19415,"enrYear":2024,"website":"https://www.sinclair.edu","cityWebsite":"https://www.daytonohio.gov","tab":"main"},{"name":"Southern State Community College","address":"100 Hobart Dr","city":"Hillsboro","state":"OH","zip":"45133","type":"Community College","control":"Public","sector":"2-Year","enrollment":2227,"enrYear":2024,"website":"https://www.sscc.edu","cityWebsite":"https://www.hillsboroohio.net","tab":"main"},{"name":"Stark State College","address":"6200 Frank Ave NW","city":"North Canton","state":"OH","zip":"44720","type":"College","control":"Public","sector":"2-Year","enrollment":10128,"enrYear":2024,"website":"https://www.starkstate.edu","cityWebsite":"https://www.northcantonohio.gov","tab":"main"},{"name":"Terra State Community College","address":"2830 Napoleon Rd","city":"Fremont","state":"OH","zip":"43420","type":"Community College","control":"Public","sector":"2-Year","enrollment":2214,"enrYear":2024,"website":"https://www.terra.edu","cityWebsite":"https://www.fremontohio.org","tab":"main"},{"name":"The College of Wooster","address":"1189 Beall Ave","city":"Wooster","state":"OH","zip":"44691","type":"College","control":"Private","sector":"4-Year","enrollment":1738,"enrYear":2024,"website":"https://www.wooster.edu","cityWebsite":"https://www.woosterohio.gov","tab":"main"},{"name":"Tiffin University","address":"155 Miami St","city":"Tiffin","state":"OH","zip":"44883","type":"University","control":"Private","sector":"4-Year","enrollment":3831,"enrYear":2024,"website":"https://www.tiffin.edu","cityWebsite":"https://www.tiffinohio.gov","tab":"main"},{"name":"University of Akron","address":"302 Buchtel Common","city":"Akron","state":"OH","zip":"44325","type":"University","control":"Public","sector":"4-Year","enrollment":13332,"enrYear":2024,"website":"https://www.uakron.edu","cityWebsite":"https://www.akronohio.gov","tab":"main"},{"name":"University of Akron - Wayne College","address":"1901 Smucker Rd","city":"Orrville","state":"OH","zip":"44667","type":"University Branch","control":"Public","sector":"2-Year","enrollment":1411,"enrYear":2024,"website":"https://www.uakron.edu/wayne","cityWebsite":"https://www.orrville.com","tab":"main"},{"name":"University of Cincinnati","address":"2600 Clifton Ave","city":"Cincinnati","state":"OH","zip":"45221","type":"University","control":"Public","sector":"4-Year","enrollment":62292,"enrYear":2024,"website":"https://www.uc.edu","cityWebsite":"https://www.cincinnati-oh.gov","tab":"main"},{"name":"University of Dayton","address":"300 College Park","city":"Dayton","state":"OH","zip":"45469","type":"University","control":"Private","sector":"4-Year","enrollment":10506,"enrYear":2024,"website":"https://www.udayton.edu","cityWebsite":"https://www.daytonohio.gov","tab":"main"},{"name":"University of Findlay","address":"1000 N Main St","city":"Findlay","state":"OH","zip":"45840","type":"University","control":"Private","sector":"4-Year","enrollment":5016,"enrYear":2024,"website":"https://www.findlay.edu","cityWebsite":"https://www.findlayohio.com","tab":"main"},{"name":"University of Mount Union","address":"1972 Clark Ave","city":"Alliance","state":"OH","zip":"44601","type":"University","control":"Private","sector":"4-Year","enrollment":2461,"enrYear":2024,"website":"https://www.mountunion.edu","cityWebsite":"https://www.cityofalliance.com","tab":"main"},{"name":"University of Northwestern Ohio","address":"1441 N Cable Rd","city":"Lima","state":"OH","zip":"45805","type":"University","control":"Private","sector":"4-Year","enrollment":2525,"enrYear":2024,"website":"https://www.unoh.edu","cityWebsite":"https://www.cityhall.lima.oh.us","tab":"main"},{"name":"University of Rio Grande","address":"218 N College Ave","city":"Rio Grande","state":"OH","zip":"45674","type":"University","control":"Private","sector":"4-Year","enrollment":2258,"enrYear":2024,"website":"https://www.rio.edu","cityWebsite":"https://www.gallipolisohio.com","tab":"main"},{"name":"University of Toledo","address":"2801 W Bancroft St","city":"Toledo","state":"OH","zip":"43606","type":"University","control":"Public","sector":"4-Year","enrollment":14358,"enrYear":2024,"website":"https://www.utoledo.edu","cityWebsite":"https://www.toledo.oh.gov","tab":"main"},{"name":"Ursuline College","address":"2550 Lander Rd","city":"Pepper Pike","state":"OH","zip":"44124","type":"College","control":"Private","sector":"4-Year","enrollment":970,"enrYear":2024,"website":"https://www.ursuline.edu","cityWebsite":"https://www.pepperpike.org","tab":"main"},{"name":"Walsh University","address":"2020 E Maple St NW","city":"North Canton","state":"OH","zip":"44720","type":"University","control":"Private","sector":"4-Year","enrollment":2192,"enrYear":2024,"website":"https://www.walsh.edu","cityWebsite":"https://www.northcantonohio.gov","tab":"main"},{"name":"Washington State Community College","address":"710 Colegate Dr","city":"Marietta","state":"OH","zip":"45750","type":"Community College","control":"Public","sector":"2-Year","enrollment":2025,"enrYear":2024,"website":"https://www.wscc.edu","cityWebsite":"https://www.mariettaoh.net","tab":"main"},{"name":"Wilberforce University","address":"1055 N Bickett Rd","city":"Wilberforce","state":"OH","zip":"45384","type":"University","control":"Private","sector":"4-Year","enrollment":838,"enrYear":2024,"website":"https://www.wilberforce.edu","cityWebsite":"https://www.xenia.oh.us","tab":"main"},{"name":"Wilmington College","address":"1870 Quaker Way","city":"Wilmington","state":"OH","zip":"45177","type":"College","control":"Private","sector":"4-Year","enrollment":1040,"enrYear":2024,"website":"https://www.wilmington.edu","cityWebsite":"https://www.wilmingtonohio.gov","tab":"main"},{"name":"Wittenberg University","address":"200 W Ward St","city":"Springfield","state":"OH","zip":"45501","type":"University","control":"Private","sector":"4-Year","enrollment":1285,"enrYear":2024,"website":"https://www.wittenberg.edu","cityWebsite":"https://www.springfieldohio.gov","tab":"main"},{"name":"Wright State University","address":"3640 Colonel Glenn Hwy","city":"Fairborn","state":"OH","zip":"45435","type":"University","control":"Public","sector":"4-Year","enrollment":11959,"enrYear":2024,"website":"https://www.wright.edu","cityWebsite":"https://www.fairborn.com","tab":"main"},{"name":"Xavier University","address":"3800 Victory Pkwy","city":"Cincinnati","state":"OH","zip":"45207","type":"University","control":"Private","sector":"4-Year","enrollment":5501,"enrYear":2024,"website":"https://www.xavier.edu","cityWebsite":"https://www.cincinnati-oh.gov","tab":"main"},{"name":"Youngstown State University","address":"1 University Plaza","city":"Youngstown","state":"OH","zip":"44555","type":"University","control":"Public","sector":"4-Year","enrollment":12204,"enrYear":2024,"website":"https://www.ysu.edu","cityWebsite":"https://www.youngstownohio.gov","tab":"main"},{"name":"Zane State College","address":"1555 Newark Rd","city":"Zanesville","state":"OH","zip":"43701","type":"Community College","control":"Public","sector":"2-Year","enrollment":1769,"enrYear":2024,"website":"https://www.zanestate.edu","cityWebsite":"https://www.coz.org","tab":"main"}];
+
+const BRANCHES = [{"name":"Kent State - Ashtabula","parentUniversity":"Kent State University","address":"3300 Lake Rd W","city":"Ashtabula","state":"OH","zip":"44004","type":"University Branch","control":"Public","enrollment":1850,"enrYear":2024,"website":"https://www.kent.edu/ashtabula","cityWebsite":"https://www.ashtabula.com","tab":"branch"},{"name":"Kent State - East Liverpool","parentUniversity":"Kent State University","address":"400 E Fourth St","city":"East Liverpool","state":"OH","zip":"43920","type":"University Branch","control":"Public","enrollment":900,"enrYear":2024,"website":"https://www.kent.edu/eastliverpool","cityWebsite":"https://www.eastliverpoolohio.gov","tab":"branch"},{"name":"Kent State - Geauga","parentUniversity":"Kent State University","address":"14111 Claridon-Troy Rd","city":"Burton","state":"OH","zip":"44021","type":"University Branch","control":"Public","enrollment":1276,"enrYear":2024,"website":"https://www.kent.edu/geauga","cityWebsite":"https://www.burtonohio.gov","tab":"branch"},{"name":"Kent State - Salem","parentUniversity":"Kent State University","address":"2491 State Route 45 S","city":"Salem","state":"OH","zip":"44460","type":"University Branch","control":"Public","enrollment":1200,"enrYear":2024,"website":"https://www.kent.edu/salem","cityWebsite":"https://www.cityofsalemohio.org","tab":"branch"},{"name":"Kent State - Stark","parentUniversity":"Kent State University","address":"6000 Frank Ave NW","city":"North Canton","state":"OH","zip":"44720","type":"University Branch","control":"Public","enrollment":7250,"enrYear":2024,"website":"https://www.kent.edu/stark","cityWebsite":"https://www.northcantonohio.gov","tab":"branch"},{"name":"Kent State - Trumbull","parentUniversity":"Kent State University","address":"4314 Mahoning Ave NW","city":"Warren","state":"OH","zip":"44483","type":"University Branch","control":"Public","enrollment":1158,"enrYear":2024,"website":"https://www.kent.edu/trumbull","cityWebsite":"https://www.cityofwarren.org","tab":"branch"},{"name":"Kent State - Tuscarawas","parentUniversity":"Kent State University","address":"330 University Dr NE","city":"New Philadelphia","state":"OH","zip":"44663","type":"University Branch","control":"Public","enrollment":2000,"enrYear":2024,"website":"https://www.kent.edu/tuscarawas","cityWebsite":"https://www.newphiladelphiaohio.org","tab":"branch"},{"name":"Miami University - Hamilton","parentUniversity":"Miami University","address":"1601 University Blvd","city":"Hamilton","state":"OH","zip":"45011","type":"University Branch","control":"Public","enrollment":1800,"enrYear":2024,"website":"https://www.miamioh.edu/regionals/campuses-locations/hamilton","cityWebsite":"https://www.hamilton-oh.gov","tab":"branch"},{"name":"Miami University - Middletown","parentUniversity":"Miami University","address":"4200 N University Blvd","city":"Middletown","state":"OH","zip":"45042","type":"University Branch","control":"Public","enrollment":1500,"enrYear":2024,"website":"https://www.miamioh.edu/regionals/campuses-locations/middletown","cityWebsite":"https://www.cityofmiddletown.org","tab":"branch"},{"name":"Miami University - West Chester (VOA)","parentUniversity":"Miami University","address":"7847 VOA Park Dr","city":"West Chester","state":"OH","zip":"45069","type":"University Branch","control":"Public","enrollment":350,"enrYear":2024,"website":"https://www.miamioh.edu/regionals","cityWebsite":"https://www.westchesteroh.org","tab":"branch"},{"name":"Ohio State - ATI (Wooster)","parentUniversity":"Ohio State University","address":"1328 Dover Rd","city":"Wooster","state":"OH","zip":"44691","type":"University Branch","control":"Public","enrollment":760,"enrYear":2024,"website":"https://ati.osu.edu","cityWebsite":"https://www.woosterohio.gov","tab":"branch"},{"name":"Ohio State - Lima","parentUniversity":"Ohio State University","address":"4240 Campus Dr","city":"Lima","state":"OH","zip":"45804","type":"University Branch","control":"Public","enrollment":780,"enrYear":2024,"website":"https://lima.osu.edu","cityWebsite":"https://www.cityhall.lima.oh.us","tab":"branch"},{"name":"Ohio State - Mansfield","parentUniversity":"Ohio State University","address":"1760 University Dr","city":"Mansfield","state":"OH","zip":"44906","type":"University Branch","control":"Public","enrollment":900,"enrYear":2024,"website":"https://mansfield.osu.edu","cityWebsite":"https://www.ci.mansfield.oh.us","tab":"branch"},{"name":"Ohio State - Marion","parentUniversity":"Ohio State University","address":"1465 Mt. Vernon Ave","city":"Marion","state":"OH","zip":"43302","type":"University Branch","control":"Public","enrollment":850,"enrYear":2024,"website":"https://osumarion.osu.edu","cityWebsite":"https://www.marionohio.us","tab":"branch"},{"name":"Ohio State - Newark","parentUniversity":"Ohio State University","address":"1179 University Dr","city":"Newark","state":"OH","zip":"43055","type":"University Branch","control":"Public","enrollment":2470,"enrYear":2024,"website":"https://newark.osu.edu","cityWebsite":"https://www.newarkohio.net","tab":"branch"},{"name":"Ohio University - Chillicothe","parentUniversity":"Ohio University","address":"101 University Dr","city":"Chillicothe","state":"OH","zip":"45601","type":"University Branch","control":"Public","enrollment":2304,"enrYear":2024,"website":"https://www.ohio.edu/chillicothe","cityWebsite":"https://www.chillicotheohio.com","tab":"branch"},{"name":"Ohio University - Eastern","parentUniversity":"Ohio University","address":"45425 National Road W","city":"St. Clairsville","state":"OH","zip":"43950","type":"University Branch","control":"Public","enrollment":1328,"enrYear":2024,"website":"https://www.ohio.edu/eastern","cityWebsite":"https://www.stclairsvilleohio.gov","tab":"branch"},{"name":"Ohio University - Lancaster","parentUniversity":"Ohio University","address":"1570 Granville Pike","city":"Lancaster","state":"OH","zip":"43130","type":"University Branch","control":"Public","enrollment":2273,"enrYear":2024,"website":"https://www.ohio.edu/lancaster","cityWebsite":"https://www.ci.lancaster.oh.us","tab":"branch"},{"name":"Ohio University - Southern","parentUniversity":"Ohio University","address":"1804 Liberty Ave","city":"Ironton","state":"OH","zip":"45638","type":"University Branch","control":"Public","enrollment":1844,"enrYear":2024,"website":"https://www.ohio.edu/southern","cityWebsite":"https://www.irontoncity.com","tab":"branch"},{"name":"Ohio University - Zanesville","parentUniversity":"Ohio University","address":"1425 Newark Rd","city":"Zanesville","state":"OH","zip":"43701","type":"University Branch","control":"Public","enrollment":2088,"enrYear":2024,"website":"https://www.ohio.edu/zanesville","cityWebsite":"https://www.coz.org","tab":"branch"},{"name":"Wright State - Lake Campus","parentUniversity":"Wright State University","address":"7600 Lake Campus Dr","city":"Celina","state":"OH","zip":"45822","type":"University Branch","control":"Public","enrollment":1100,"enrYear":2024,"website":"https://lake.wright.edu","cityWebsite":"https://www.cityofcelina.com","tab":"branch"}];
+
+// ─── COORDINATES (geocoded) ─────────────────────────────────────────────────
+const COORDS = {
+  "Air Force Institute of Technology":[39.8283,-84.0522],
+  "Allegheny Wesleyan College":[40.9012,-80.8634],
+  "American Institute of Alternative Medicine":[40.0920,-82.9813],
+  "Antioch College":[39.8015,-83.8921],
+  "Antioch University":[39.8010,-83.8930],
+  "Art Academy of Cincinnati":[39.1040,-84.5120],
+  "Ashland University":[40.8684,-82.3182],
+  "Athenaeum of Ohio":[39.0680,-84.4010],
+  "Aultman College of Nursing and Health Sciences":[40.7920,-81.3840],
+  "Baldwin Wallace University":[41.3718,-81.8567],
+  "Belmont College":[40.0812,-80.9023],
+  "Bluffton University":[40.8959,-83.8871],
+  "Bowling Green State University":[41.3756,-83.6513],
+  "Bowling Green State University - Firelands":[41.3934,-82.5518],
+  "Capital University":[39.9607,-82.9318],
+  "Case Western Reserve University":[41.5038,-81.6088],
+  "Cedarville University":[39.7442,-83.9972],
+  "Central Ohio Technical College":[40.0760,-82.3996],
+  "Central State University":[39.7173,-83.8771],
+  "Cincinnati State Technical and Community College":[39.1323,-84.5340],
+  "Clark State College":[39.9117,-83.8110],
+  "Cleveland Institute of Art":[41.5085,-81.5993],
+  "Cleveland Institute of Music":[41.5080,-81.6070],
+  "Cleveland State University":[41.4997,-81.6773],
+  "Columbus College of Art and Design":[39.9620,-82.9990],
+  "Columbus State Community College":[39.9612,-82.9960],
+  "Cuyahoga Community College":[41.4993,-81.6860],
+  "Defiance College":[41.2856,-84.3640],
+  "Denison University":[40.0707,-82.5176],
+  "Edison State Community College":[40.1453,-84.2390],
+  "Franciscan University of Steubenville":[40.3601,-80.6343],
+  "Franklin University":[39.9600,-82.9980],
+  "Heidelberg University":[41.1148,-83.1792],
+  "Hiram College":[41.3140,-81.1368],
+  "Hocking College":[39.4590,-82.2290],
+  "Hondros College of Nursing":[40.1020,-82.9283],
+  "James A. Rhodes State College":[40.7300,-84.0940],
+  "John Carroll University":[41.4919,-81.5230],
+  "Kent State University":[41.1534,-81.3397],
+  "Kenyon College":[40.3736,-82.3920],
+  "Kettering College":[39.6870,-84.1680],
+  "Lake Erie College":[41.7234,-81.2432],
+  "Lakeland Community College":[41.6060,-81.3400],
+  "Lorain County Community College":[41.3630,-82.0834],
+  "Lourdes University":[41.7013,-83.7132],
+  "Malone University":[40.8130,-81.3980],
+  "Marietta College":[39.4153,-81.4533],
+  "Marion Technical College":[40.5860,-82.9830],
+  "Mercy College of Ohio":[41.6550,-83.5480],
+  "Miami University":[39.5092,-84.7340],
+  "Mount Carmel College of Nursing":[39.9540,-83.0320],
+  "Mount St. Joseph University":[39.1113,-84.6570],
+  "Mount Vernon Nazarene University":[40.3960,-82.4640],
+  "Muskingum University":[40.0010,-81.7360],
+  "North Central State College":[40.7450,-82.5200],
+  "Northeast Ohio Medical University":[41.0950,-81.2190],
+  "Northwest State Community College":[41.6040,-84.3080],
+  "Oberlin College":[41.2936,-82.2177],
+  "Ohio Christian University":[39.5700,-82.9480],
+  "Ohio Dominican University":[40.0210,-82.9550],
+  "Ohio Northern University":[40.7690,-83.8240],
+  "Ohio State University":[40.0076,-83.0307],
+  "Ohio Technical College":[41.5290,-81.6570],
+  "Ohio University":[39.3242,-82.1013],
+  "Ohio Wesleyan University":[40.2970,-83.0680],
+  "Otterbein University":[40.1130,-82.9190],
+  "Owens Community College":[41.5520,-83.6850],
+  "Pontifical College Josephinum":[40.1210,-82.9990],
+  "Shawnee State University":[38.7320,-82.9980],
+  "Sinclair Community College":[39.7610,-84.1930],
+  "Southern State Community College":[39.2040,-83.6110],
+  "Stark State College":[40.8700,-81.4100],
+  "Terra State Community College":[41.3620,-83.1200],
+  "The College of Wooster":[40.8010,-81.9250],
+  "Tiffin University":[41.1148,-83.1740],
+  "University of Akron":[41.0753,-81.5090],
+  "University of Akron - Wayne College":[40.8360,-81.7590],
+  "University of Cincinnati":[39.1329,-84.5150],
+  "University of Dayton":[39.7400,-84.1780],
+  "University of Findlay":[41.0440,-83.6500],
+  "University of Mount Union":[40.9130,-81.1070],
+  "University of Northwestern Ohio":[40.7350,-84.0990],
+  "University of Rio Grande":[38.8740,-82.3720],
+  "University of Toledo":[41.6580,-83.6120],
+  "Ursuline College":[41.4830,-81.4720],
+  "Walsh University":[40.8760,-81.4090],
+  "Washington State Community College":[39.4140,-81.4650],
+  "Wilberforce University":[39.7160,-83.8760],
+  "Wilmington College":[39.4450,-83.8230],
+  "Wittenberg University":[39.9260,-83.8190],
+  "Wright State University":[39.7810,-84.0540],
+  "Xavier University":[39.1520,-84.4720],
+  "Youngstown State University":[41.0990,-80.6450],
+  "Zane State College":[39.9350,-82.0330],
+  // Branch campuses
+  "Kent State - Ashtabula":[41.8520,-80.7900],
+  "Kent State - East Liverpool":[40.6180,-80.5640],
+  "Kent State - Geauga":[41.4660,-81.1480],
+  "Kent State - Salem":[40.9010,-80.8680],
+  "Kent State - Stark":[40.8740,-81.4120],
+  "Kent State - Trumbull":[41.2330,-80.8180],
+  "Kent State - Tuscarawas":[40.4920,-81.4470],
+  "Miami University - Hamilton":[39.4000,-84.5490],
+  "Miami University - Middletown":[39.5250,-84.3950],
+  "Miami University - West Chester (VOA)":[39.3450,-84.4040],
+  "Ohio State - ATI (Wooster)":[40.8150,-81.9220],
+  "Ohio State - Lima":[40.7280,-84.0930],
+  "Ohio State - Mansfield":[40.7460,-82.5210],
+  "Ohio State - Marion":[40.5860,-82.9890],
+  "Ohio State - Newark":[40.0770,-82.3990],
+  "Ohio University - Chillicothe":[39.3270,-82.9790],
+  "Ohio University - Eastern":[40.0760,-80.9050],
+  "Ohio University - Lancaster":[39.7160,-82.5980],
+  "Ohio University - Southern":[38.5370,-82.6820],
+  "Ohio University - Zanesville":[39.9360,-82.0190],
+  "Wright State - Lake Campus":[40.5360,-84.5680]
+};
+
+// ─── COLOR CONFIG ──────────────────────────────────────────────────────────
+const COLOR = { Public: '#1a56c4', Private: '#c0392b' };
+
+// ─── SVG ICONS ─────────────────────────────────────────────────────────────
+function makeIconSVG(type, color) {
+  const c = color || '#666';
+  switch(type) {
+    case 'University':
+      return `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="34" viewBox="0 0 28 34">
+        <path d="M14 0L0 8v2h2v16H0v4h28v-4h-2V10h2V8z" fill="${c}" stroke="white" stroke-width="1.2"/>
+        <rect x="6" y="10" width="4" height="10" fill="white" opacity="0.7"/>
+        <rect x="12" y="10" width="4" height="10" fill="white" opacity="0.7"/>
+        <rect x="18" y="10" width="4" height="10" fill="white" opacity="0.7"/>
+        <rect x="9" y="23" width="10" height="7" fill="white" opacity="0.8"/>
+        <path d="M14 2 2 8h24z" fill="white" opacity="0.25"/>
+        <circle cx="14" cy="34" r="4" fill="${c}" opacity="0.3"/>
+      </svg>`;
+    case 'University Branch':
+      return `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="32" viewBox="0 0 26 32">
+        <path d="M13 0L1 7v2h2v14H1v4h24v-4h-2V9h2V7z" fill="${c}" stroke="white" stroke-width="1.2"/>
+        <rect x="5" y="9" width="3" height="9" fill="white" opacity="0.65"/>
+        <rect x="11" y="9" width="4" height="9" fill="white" opacity="0.65"/>
+        <rect x="18" y="9" width="3" height="9" fill="white" opacity="0.65"/>
+        <rect x="8" y="21" width="10" height="6" fill="white" opacity="0.75"/>
+        <line x1="13" y1="0" x2="13" y2="4" stroke="white" stroke-width="2"/>
+        <circle cx="13" cy="32" r="4" fill="${c}" opacity="0.3"/>
+      </svg>`;
+    case 'College':
+      return `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="32" viewBox="0 0 26 32">
+        <rect x="1" y="8" width="24" height="18" rx="2" fill="${c}" stroke="white" stroke-width="1.2"/>
+        <polygon points="13,0 0,7 26,7" fill="${c}" stroke="white" stroke-width="1.2"/>
+        <rect x="4" y="11" width="5" height="7" fill="white" opacity="0.7"/>
+        <rect x="17" y="11" width="5" height="7" fill="white" opacity="0.7"/>
+        <rect x="9" y="17" width="8" height="9" fill="white" opacity="0.8"/>
+        <circle cx="13" cy="32" r="4" fill="${c}" opacity="0.3"/>
+      </svg>`;
+    case 'Community College':
+      return `<svg xmlns="http://www.w3.org/2000/svg" width="28" height="32" viewBox="0 0 28 32">
+        <rect x="0" y="10" width="28" height="16" rx="2" fill="${c}" stroke="white" stroke-width="1.2"/>
+        <rect x="3" y="6" width="22" height="5" rx="1" fill="${c}" stroke="white" stroke-width="1"/>
+        <rect x="6" y="3" width="16" height="4" rx="1" fill="${c}" stroke="white" stroke-width="1"/>
+        <rect x="3" y="14" width="5" height="5" fill="white" opacity="0.7"/>
+        <rect x="20" y="14" width="5" height="5" fill="white" opacity="0.7"/>
+        <rect x="10" y="19" width="8" height="7" fill="white" opacity="0.8"/>
+        <circle cx="14" cy="32" r="4" fill="${c}" opacity="0.3"/>
+      </svg>`;
+    default:
+      return `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="30" viewBox="0 0 24 30"><circle cx="12" cy="12" r="10" fill="${c}" stroke="white" stroke-width="1.5"/><circle cx="12" cy="30" r="4" fill="${c}" opacity="0.3"/></svg>`;
+  }
+}
+
+function svgIcon(type, color) { return makeIconSVG(type, color); }
+
+function makeLeafletIcon(type, control) {
+  const color = COLOR[control] || '#555';
+  const svg = makeIconSVG(type, color);
+  return L.divIcon({
+    html: svg,
+    className: '',
+    iconSize: [28, 34],
+    iconAnchor: [14, 34],
+    popupAnchor: [0, -34]
+  });
+}
+
+// ─── MAP INIT ───────────────────────────────────────────────────────────────
+const map = L.map('map', { center: [40.2, -82.6], zoom: 7, zoomControl: true });
+
+// Daytime map tiles
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+  attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+  maxZoom: 19
+}).addTo(map);
+
+// Move zoom control to avoid overlap on desktop
+map.zoomControl.setPosition('topleft');
+
+// ─── MARKER MANAGEMENT ──────────────────────────────────────────────────────
+let allMarkers = [];
+let activeFilters = { types: new Set(['University','University Branch','College','Community College']), controls: new Set(['Public','Private']) };
+
+function addMarker(inst) {
+  const coords = COORDS[inst.name];
+  if (!coords) return null;
+  const icon = makeLeafletIcon(inst.type, inst.control);
+  const addr = `${inst.address}, ${inst.city}, ${inst.state} ${inst.zip}`;
+  const marker = L.marker(coords, { icon })
+    .bindTooltip(`<b>${inst.name}</b><br>${addr}`, { className:'inst-tip', sticky:true, offset:[10,0] })
+    .on('click', () => openModal(inst));
+  marker._instData = inst;
+  return marker;
+}
+
+const layerGroup = L.layerGroup().addTo(map);
+
+function renderMarkers() {
+  layerGroup.clearLayers();
+  let shown = 0;
+  allMarkers.forEach(m => {
+    const d = m._instData;
+    if (activeFilters.types.has(d.type) && activeFilters.controls.has(d.control)) {
+      layerGroup.addLayer(m);
+      shown++;
+    }
+  });
+  updateTotals(shown);
+}
+
+// Build all markers
+[...INSTITUTIONS, ...BRANCHES].forEach(inst => {
+  const m = addMarker(inst);
+  if (m) allMarkers.push(m);
+});
+renderMarkers();
+
+// ─── TOTALS ─────────────────────────────────────────────────────────────────
+function updateTotals(shown) {
+  const all = [...INSTITUTIONS, ...BRANCHES];
+  const vis = all.filter(d => activeFilters.types.has(d.type) && activeFilters.controls.has(d.control));
+  const byType = {};
+  vis.forEach(d => { byType[d.type] = (byType[d.type]||0)+1; });
+  const totalEnroll = vis.reduce((s,d) => s + (d.enrollment||0), 0);
+  let html = '';
+  ['University','University Branch','College','Community College'].forEach(t => {
+    if (byType[t]) html += `<div class="total-item"><span class="total-label">${t}</span><span class="total-val">${byType[t]}</span></div>`;
+  });
+  html += `<div class="total-item"><span class="total-label">Public</span><span class="total-val">${vis.filter(d=>d.control==='Public').length}</span></div>`;
+  html += `<div class="total-item"><span class="total-label">Private</span><span class="total-val">${vis.filter(d=>d.control==='Private').length}</span></div>`;
+  html += `<div class="total-item" style="border-top:2px solid #ddd;margin-top:4px"><span class="total-label">Enrollment</span><span class="total-val">${totalEnroll.toLocaleString()}</span></div>`;
+  html += `<div class="total-item"><span class="total-label">Shown</span><span class="total-val">${shown}</span></div>`;
+  document.getElementById('totals-body').innerHTML = html;
+}
+
+// ─── FILTERS ────────────────────────────────────────────────────────────────
+document.querySelectorAll('input[data-filter]').forEach(cb => {
+  cb.addEventListener('change', () => {
+    activeFilters.types = new Set();
+    activeFilters.controls = new Set();
+    document.querySelectorAll('input[data-filter="type"]:checked').forEach(el => activeFilters.types.add(el.value));
+    document.querySelectorAll('input[data-filter="control"]:checked').forEach(el => activeFilters.controls.add(el.value));
+    renderMarkers();
+  });
+});
+
+function resetFilters() {
+  document.querySelectorAll('input[data-filter]').forEach(cb => cb.checked = true);
+  activeFilters.types = new Set(['University','University Branch','College','Community College']);
+  activeFilters.controls = new Set(['Public','Private']);
+  renderMarkers();
+}
+
+// ─── PANEL TOGGLE ───────────────────────────────────────────────────────────
+function togglePanel(id) {
+  document.getElementById(id).classList.toggle('collapsed');
+}
+
+function toggleMobilePanel(id) {
+  const panel = document.getElementById(id);
+  const isOpen = panel.classList.contains('mobile-open');
+  document.querySelectorAll('.panel').forEach(p => p.classList.remove('mobile-open'));
+  if (!isOpen) panel.classList.add('mobile-open');
+}
+
+// ─── MODAL ──────────────────────────────────────────────────────────────────
+function openModal(inst) {
+  const addr = `${inst.address}, ${inst.city}, ${inst.state} ${inst.zip}`;
+  const gmapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(addr)}`;
+  const typeColors = {
+    'University': '#002868',
+    'University Branch': '#1a56c4',
+    'College': '#BF0A30',
+    'Community College': '#8B0000'
+  };
+  const badgeBg = typeColors[inst.type] || '#555';
+
+  document.getElementById('modal-title').textContent = inst.name;
+  const badge = document.getElementById('modal-type-badge');
+  badge.textContent = inst.type;
+  badge.style.background = badgeBg;
+  badge.style.color = 'white';
+
+  let html = `
+    <div class="modal-row">
+      <div class="modal-field"><div class="modal-field-label">Address</div><div class="modal-field-value">${inst.address}</div></div>
+      <div class="modal-field"><div class="modal-field-label">City</div><div class="modal-field-value">${inst.city}, ${inst.state}</div></div>
+    </div>
+    <div class="modal-row">
+      <div class="modal-field"><div class="modal-field-label">ZIP Code</div><div class="modal-field-value">${inst.zip}</div></div>
+      <div class="modal-field"><div class="modal-field-label">Control</div><div class="modal-field-value" style="color:${COLOR[inst.control]||'#333'};font-weight:700">${inst.control}</div></div>
+    </div>`;
+
+  if (inst.sector) {
+    html += `<div class="modal-row">
+      <div class="modal-field"><div class="modal-field-label">Sector</div><div class="modal-field-value">${inst.sector}</div></div>
+      ${inst.enrollment ? `<div class="modal-field"><div class="modal-field-label">Enrollment (${inst.enrYear||''})</div><div class="modal-field-value">${inst.enrollment.toLocaleString()} students</div></div>` : ''}
+    </div>`;
+  } else if (inst.enrollment) {
+    html += `<div class="modal-row">
+      <div class="modal-field"><div class="modal-field-label">Enrollment (${inst.enrYear||''})</div><div class="modal-field-value">${inst.enrollment.toLocaleString()} students</div></div>
+    </div>`;
+  }
+
+  if (inst.parentUniversity) {
+    html += `<div class="modal-row">
+      <div class="modal-field"><div class="modal-field-label">Parent University</div><div class="modal-field-value">${inst.parentUniversity}</div></div>
+    </div>`;
+  }
+
+  html += `<hr class="modal-divider">
+    <div style="display:flex;flex-wrap:wrap;gap:6px;margin-top:4px">`;
+
+  if (inst.website) {
+    html += `<a href="${inst.website}" target="_blank" rel="noopener" class="modal-link-btn btn-primary">🎓 Institution Website</a>`;
+  }
+  html += `<a href="${gmapsUrl}" target="_blank" rel="noopener" class="modal-link-btn btn-gmaps">📍 Get Directions</a>`;
+  if (inst.cityWebsite) {
+    html += `<a href="${inst.cityWebsite}" target="_blank" rel="noopener" class="modal-link-btn btn-city">🏙 City Website</a>`;
+  }
+  html += `</div>`;
+
+  document.getElementById('modal-body').innerHTML = html;
+  document.getElementById('modal-overlay').classList.add('active');
+}
+
+function closeModal(evt) {
+  if (!evt || evt.target === document.getElementById('modal-overlay')) {
+    document.getElementById('modal-overlay').classList.remove('active');
+  }
+}
+
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// ─── LEGEND SVG INLINE RENDER ───────────────────────────────────────────────
+// Replace placeholder ${svgIcon(...)} strings in the legend
+document.querySelectorAll('.legend-icon').forEach(el => {
+  const txt = el.innerHTML;
+  const m = txt.match(/\$\{svgIcon\('([^']+)','([^']+)'\)\}/);
+  if (m) el.innerHTML = makeIconSVG(m[1], m[2]);
+});
+</script>
+</body>
+</html>
